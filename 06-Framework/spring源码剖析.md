@@ -63,7 +63,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 }
 ```
 
-![image-20240708153608625](/Users/wangxin/IdeaProjects/LearningNotes/images/ClassPathXmlApplicationContext.png)
+![image-20240708153608625](../images/ClassPathXmlApplicationContext.png)
 
 #### 1-2) `setConfigLocations`方法
 
@@ -145,7 +145,7 @@ ConfigurablePropertyResolver resolver = new PropertySourcesPropertyResolver(prop
 
 注意：方法的具体实现在`PropertySourcesProperty`的父类`ResolverAbstractPropertyResolver`中实现
 
-![image-20240708141344160](/Users/wangxin/IdeaProjects/LearningNotes/images/StandardEnviroment.png)
+![image-20240708141344160](../images/StandardEnviroment.png)
 
 ```Java
 // 刚刚说的具体实现在Spring中是通过递归来处理
@@ -323,7 +323,7 @@ public AbstractAutowireCapableBeanFactory() {
 }
 ```
 
-![DefaultListableBeanFactory](/Users/wangxin/IdeaProjects/LearningNotes/images/DefaultListableBeanFactory.png)
+![DefaultListableBeanFactory](../images/DefaultListableBeanFactory.png)
 
 ```Java
 // getInternalParentBeanFactory调用父类AbstractApplicationContext中的方法
@@ -528,7 +528,7 @@ this.beanDefinitionNames.add(beanName);
 
 `XmlBeanDefinitionReader`的继承关系
 
-![image-20240708161847847](/Users/wangxin/IdeaProjects/LearningNotes/images/XmlBeanDefinitionReader.png)
+![image-20240708161847847](../images/XmlBeanDefinitionReader.png)
 
 ```Java
 // context
@@ -563,7 +563,7 @@ encodedResource.charset = null;
 new ClassPathContextResource(path, getClassLoader());// TODO
 ```
 
-![](/Users/wangxin/IdeaProjects/LearningNotes/images/ClassPathXmlApplicationContext.png)
+![](../images/ClassPathXmlApplicationContext.png)
 
 #### 3-4）自定义标签写法
 
