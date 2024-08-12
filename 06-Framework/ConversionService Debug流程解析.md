@@ -77,9 +77,9 @@ public class DefaultConversionService extends GenericConversionService {
 }
 ```
 
-![image-20240810173513895](/Users/wangxin/IdeaProjects/LearningNotes/images/DefaultConversionService的继承关系.png)
+![image-20240810173513895](../images/DefaultConversionService的继承关系.png)
 
-![image-20240812162503532](/Users/wangxin/IdeaProjects/LearningNotes/images/WebConversionService继承关系图.png)
+![image-20240812162503532](../images/WebConversionService继承关系图.png)
 
 ### 二、SpringBoot Debug流程解析，怎么找到对应的convert转换器
 
@@ -161,7 +161,8 @@ private ResolvableType(@Nullable Class<?> clazz) {
 ```
 
 ```Java
-// class TypeDescriptor 构造方法，其中AnnotatedElementAdapter是TypeDescriptor的私有内部类，实现了AnnotatedElement接口，而resolvableType.toClass()则返回的是刚刚调用ResolvableType类中的私有构造方法初始化的resolved字段的值
+// class TypeDescriptor 构造方法，其中AnnotatedElementAdapter是TypeDescriptor的私有内部类，实现了AnnotatedElement接口
+// resolvableType.toClass()则返回的是刚刚调用ResolvableType类中的私有构造方法初始化的resolved字段的值
 public TypeDescriptor(ResolvableType resolvableType, @Nullable Class<?> type, @Nullable Annotation[] annotations) {
     this.resolvableType = resolvableType;
     this.type = (type != null ? type : resolvableType.toClass());
@@ -461,7 +462,7 @@ private final class ConverterFactoryAdapter implements ConditionalGenericConvert
 }
 ```
 
-![image-20240812155327107](/Users/wangxin/IdeaProjects/LearningNotes/images/ConditionalGenericConverter继承关系.png)
+![image-20240812155327107](../images/ConditionalGenericConverter继承关系.png)
 
 2-5) 调用转换器的convert方法
 
