@@ -1093,6 +1093,7 @@ protected void initMessageSource() {
 ```Java
 protected void initApplicationEventMulticaster() {
     ConfigurableListableBeanFactory beanFactory = getBeanFactory();
+// 	public static final String APPLICATION_EVENT_MULTICASTER_BEAN_NAME = "applicationEventMulticaster";
     if (beanFactory.containsLocalBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME)) {
        this.applicationEventMulticaster =
              beanFactory.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, ApplicationEventMulticaster.class);
@@ -1103,7 +1104,117 @@ protected void initApplicationEventMulticaster() {
 }
 ```
 
-10、
+在finishRefresh方法中，存在发布事件
+
+```Java
+// class AbstractApplicationContext
+protected void finishRefresh() {
+		// 发布事件
+    publishEvent(new ContextRefreshedEvent(this));
+}
+
+
+@Override
+public void publishEvent(ApplicationEvent event) {
+  publishEvent(event, null);
+}
+
+protected void publishEvent(Object event, @Nullable ResolvableType eventType) {
+		Assert.notNull(event, "Event must not be null");
+
+		// 如果有需要，装饰event字段为ApplicationEvent类型
+		ApplicationEvent applicationEvent;
+		if (event instanceof ApplicationEvent) {
+			applicationEvent = (ApplicationEvent) event;
+		}
+		else {
+			applicationEvent = new PayloadApplicationEvent<>(this, event);
+			if (eventType == null) {
+				eventType = ((PayloadApplicationEvent<?>) applicationEvent).getResolvableType();
+			}
+		}
+
+		if (this.earlyApplicationEvents != null) {
+			this.earlyApplicationEvents.add(applicationEvent);
+		}
+		else {
+      // 多播出去
+			getApplicationEventMulticaster().multicastEvent(applicationEvent, eventType);
+		}
+
+		// Publish event via parent context as well...
+		if (this.parent != null) {
+			if (this.parent instanceof AbstractApplicationContext) {
+				((AbstractApplicationContext) this.parent).publishEvent(event, eventType);
+			}
+			else {
+				this.parent.publishEvent(event);
+			}
+		}
+	}
+```
+
+```Java
+// class SimpleApplicationEventMulticaster
+@Override
+public void multicastEvent(final ApplicationEvent event, @Nullable ResolvableType eventType) {
+    ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
+    Executor executor = getTaskExecutor();
+    for (ApplicationListener<?> listener : getApplicationListeners(event, type)) {
+       if (executor != null) {
+          executor.execute(() -> invokeListener(listener, event));
+       }
+       else {
+          invokeListener(listener, event);
+       }
+    }
+}
+
+protected void invokeListener(ApplicationListener<?> listener, ApplicationEvent event) {
+  ErrorHandler errorHandler = getErrorHandler();
+  if (errorHandler != null) {
+    try {
+      doInvokeListener(listener, event);
+    }
+    catch (Throwable err) {
+      errorHandler.handleError(err);
+    }
+  }
+  else {
+    doInvokeListener(listener, event);
+  }
+}
+
+@SuppressWarnings({"rawtypes", "unchecked"})
+private void doInvokeListener(ApplicationListener listener, ApplicationEvent event) {
+  try {
+    listener.onApplicationEvent(event);
+  }
+  catch (ClassCastException ex) {
+    String msg = ex.getMessage();
+    if (msg == null || matchesClassCastMessage(msg, event.getClass()) ||
+        (event instanceof PayloadApplicationEvent &&
+            matchesClassCastMessage(msg, ((PayloadApplicationEvent) event).getPayload().getClass()))) {
+      // Possibly a lambda-defined listener which we could not resolve the generic event type for
+      // -> let's suppress the exception.
+      Log loggerToUse = this.lazyLogger;
+      if (loggerToUse == null) {
+        loggerToUse = LogFactory.getLog(getClass());
+        this.lazyLogger = loggerToUse;
+      }
+      if (loggerToUse.isTraceEnabled()) {
+        loggerToUse.trace("Non-matching event type for listener: " + listener, ex);
+      }
+    }
+    else {
+      throw ex;
+    }
+  }
+}
+
+```
+
+事件的发布和监听是观察者模式，只不过正常的观察者模式是观察者和被观察者。而事件中的观察者模式进一步拆分，分为了四部分，监听事件、监听器、多播器（根据事件类型找到相关的监听起，调用监听器中的方法）、监听源（发布事件，然后多播器调用相关监听器）
 
 ```Java
 
