@@ -1088,7 +1088,7 @@ protected void initMessageSource() {
 }
 ```
 
-### 9、初始化事件多播器（initApplicationEventMulticaster方法）
+### 9、初始化事件多播器（initApplicationEventMulticaster方法）和注册监听器(registerListeners方法）
 
 ```Java
 protected void initApplicationEventMulticaster() {
@@ -1104,117 +1104,129 @@ protected void initApplicationEventMulticaster() {
 }
 ```
 
-在finishRefresh方法中，存在发布事件
-
-```Java
-// class AbstractApplicationContext
-protected void finishRefresh() {
-		// 发布事件
-    publishEvent(new ContextRefreshedEvent(this));
-}
-
-
-@Override
-public void publishEvent(ApplicationEvent event) {
-  publishEvent(event, null);
-}
-
-protected void publishEvent(Object event, @Nullable ResolvableType eventType) {
-		Assert.notNull(event, "Event must not be null");
-
-		// 如果有需要，装饰event字段为ApplicationEvent类型
-		ApplicationEvent applicationEvent;
-		if (event instanceof ApplicationEvent) {
-			applicationEvent = (ApplicationEvent) event;
-		}
-		else {
-			applicationEvent = new PayloadApplicationEvent<>(this, event);
-			if (eventType == null) {
-				eventType = ((PayloadApplicationEvent<?>) applicationEvent).getResolvableType();
-			}
-		}
-
-		if (this.earlyApplicationEvents != null) {
-			this.earlyApplicationEvents.add(applicationEvent);
-		}
-		else {
-      // 多播出去
-			getApplicationEventMulticaster().multicastEvent(applicationEvent, eventType);
-		}
-
-		// Publish event via parent context as well...
-		if (this.parent != null) {
-			if (this.parent instanceof AbstractApplicationContext) {
-				((AbstractApplicationContext) this.parent).publishEvent(event, eventType);
-			}
-			else {
-				this.parent.publishEvent(event);
-			}
-		}
-	}
-```
-
-```Java
-// class SimpleApplicationEventMulticaster
-@Override
-public void multicastEvent(final ApplicationEvent event, @Nullable ResolvableType eventType) {
-    ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
-    Executor executor = getTaskExecutor();
-    for (ApplicationListener<?> listener : getApplicationListeners(event, type)) {
-       if (executor != null) {
-          executor.execute(() -> invokeListener(listener, event));
-       }
-       else {
-          invokeListener(listener, event);
-       }
-    }
-}
-
-protected void invokeListener(ApplicationListener<?> listener, ApplicationEvent event) {
-  ErrorHandler errorHandler = getErrorHandler();
-  if (errorHandler != null) {
-    try {
-      doInvokeListener(listener, event);
-    }
-    catch (Throwable err) {
-      errorHandler.handleError(err);
-    }
-  }
-  else {
-    doInvokeListener(listener, event);
-  }
-}
-
-@SuppressWarnings({"rawtypes", "unchecked"})
-private void doInvokeListener(ApplicationListener listener, ApplicationEvent event) {
-  try {
-    listener.onApplicationEvent(event);
-  }
-  catch (ClassCastException ex) {
-    String msg = ex.getMessage();
-    if (msg == null || matchesClassCastMessage(msg, event.getClass()) ||
-        (event instanceof PayloadApplicationEvent &&
-            matchesClassCastMessage(msg, ((PayloadApplicationEvent) event).getPayload().getClass()))) {
-      // Possibly a lambda-defined listener which we could not resolve the generic event type for
-      // -> let's suppress the exception.
-      Log loggerToUse = this.lazyLogger;
-      if (loggerToUse == null) {
-        loggerToUse = LogFactory.getLog(getClass());
-        this.lazyLogger = loggerToUse;
-      }
-      if (loggerToUse.isTraceEnabled()) {
-        loggerToUse.trace("Non-matching event type for listener: " + listener, ex);
-      }
-    }
-    else {
-      throw ex;
-    }
-  }
-}
-
-```
-
 事件的发布和监听是观察者模式，只不过正常的观察者模式是观察者和被观察者。而事件中的观察者模式进一步拆分，分为了四部分，监听事件、监听器、多播器（根据事件类型找到相关的监听起，调用监听器中的方法）、监听源（发布事件，然后多播器调用相关监听器）
+
+事件源：`ApplicationContext`对象实现了ApplicationEventPublisher接口，调用`pulishEvent`方法 -> 多播器：`publishEvent`方法获取到`ApplicationContext`对象中的多播器，这个多播器在启动时初始化，然后调用多播器对象中的`multicastEvent`方法 -> 在注册到多播器内的所有监听器，通过`getApplicationListeners`方法找出所有支持指定事件的监听器 -> 监听器：执行实现的`onApplicationEvent`方法
+
+[Spring事件驱动解析](Spring事件驱动解析.md)
+
+注册监听器
+
+```Java
+protected void registerListeners() {
+
+    for (ApplicationListener<?> listener : getApplicationListeners()) {
+       getApplicationEventMulticaster().addApplicationListener(listener);
+    }
+
+   // 注册监听器
+    String[] listenerBeanNames = getBeanNamesForType(ApplicationListener.class, true, false);
+    for (String listenerBeanName : listenerBeanNames) {
+       getApplicationEventMulticaster().addApplicationListenerBean(listenerBeanName);
+    }
+  
+    Set<ApplicationEvent> earlyEventsToProcess = this.earlyApplicationEvents;
+    this.earlyApplicationEvents = null;
+    if (!CollectionUtils.isEmpty(earlyEventsToProcess)) {
+       for (ApplicationEvent earlyEvent : earlyEventsToProcess) {
+          getApplicationEventMulticaster().multicastEvent(earlyEvent);
+       }
+    }
+}
+```
+
+### 10、初始化剩下的单实例（非懒加载的）finishBeanFactoryInitialization
+
+进入`finishBeanFactoryInitialization`方法
+
+```Java
+protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
+    // 为上下文初始化类型转换器ConversionService
+    if (beanFactory.containsBean(CONVERSION_SERVICE_BEAN_NAME) &&
+          beanFactory.isTypeMatch(CONVERSION_SERVICE_BEAN_NAME, ConversionService.class)) {
+       beanFactory.setConversionService(
+             beanFactory.getBean(CONVERSION_SERVICE_BEAN_NAME, ConversionService.class));
+    }
+
+    // 如果beanFactory之前没有注册嵌入值解析器，则注册默认的嵌入值解析器，主要用于注解属性值的解析
+    if (!beanFactory.hasEmbeddedValueResolver()) {
+       beanFactory.addEmbeddedValueResolver(strVal -> getEnvironment().resolvePlaceholders(strVal));
+    }
+
+    // 尽早初始化loadTimeWeaverAware bean,以便尽早注册它们的转换器
+    String[] weaverAwareNames = beanFactory.getBeanNamesForType(LoadTimeWeaverAware.class, false, false);
+    for (String weaverAwareName : weaverAwareNames) {
+       getBean(weaverAwareName);
+    }
+
+    // 禁止使用临时类加载器进行类型匹配
+    beanFactory.setTempClassLoader(null);
+
+    // 冻结所有的bean定义，说明注册的bean定义将不被修改或任何进一步的处理
+    beanFactory.freezeConfiguration();
+
+    // 实例化剩下的单例对象
+    beanFactory.preInstantiateSingletons();
+}
+```
+
+进入`BeanFactory`的`preInstantiateSingletons`方法，实例化剩下的单例对象
+
+```Java
+@Override
+public void preInstantiateSingletons() throws BeansException {
+    List<String> beanNames = new ArrayList<>(this.beanDefinitionNames);
+
+    //  初始化所有非懒加载的单例对象
+    for (String beanName : beanNames) {
+       RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
+       if (!bd.isAbstract() && bd.isSingleton() && !bd.isLazyInit()) {
+          if (isFactoryBean(beanName)) {
+             Object bean = getBean(FACTORY_BEAN_PREFIX + beanName);
+             if (bean instanceof FactoryBean) {
+                FactoryBean<?> factory = (FactoryBean<?>) bean;
+                boolean isEagerInit;
+                if (System.getSecurityManager() != null && factory instanceof SmartFactoryBean) {
+                   isEagerInit = AccessController.doPrivileged(
+                         (PrivilegedAction<Boolean>) ((SmartFactoryBean<?>) factory)::isEagerInit,
+                         getAccessControlContext());
+                }
+                else {
+                   isEagerInit = (factory instanceof SmartFactoryBean &&
+                         ((SmartFactoryBean<?>) factory).isEagerInit());
+                }
+                if (isEagerInit) {
+                   getBean(beanName);
+                }
+             }
+          }
+          else {
+             getBean(beanName);
+          }
+       }
+    }
+
+    // Trigger post-initialization callback for all applicable beans...
+    for (String beanName : beanNames) {
+       Object singletonInstance = getSingleton(beanName);
+       if (singletonInstance instanceof SmartInitializingSingleton) {
+          StartupStep smartInitialize = this.getApplicationStartup().start("spring.beans.smart-initialize")
+                .tag("beanName", beanName);
+          SmartInitializingSingleton smartSingleton = (SmartInitializingSingleton) singletonInstance;
+          if (System.getSecurityManager() != null) {
+             AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
+                smartSingleton.afterSingletonsInstantiated();
+                return null;
+             }, getAccessControlContext());
+          }
+          else {
+             smartSingleton.afterSingletonsInstantiated();
+          }
+          smartInitialize.end();
+       }
+    }
+}
+```
 
 ```Java
 
