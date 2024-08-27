@@ -734,3 +734,4 @@ protected void publishEvent(Object event, @Nullable ResolvableType eventType) {
 
 当前`Spring`的监听执行流程是，<font color="red">事件源</font>：`ApplicationContext`对象实现了ApplicationEventPublisher接口，调用`pulishEvent`方法 ->  <font color="red">多播器</font>：`publishEvent`方法获取到`ApplicationContext`对象中的多播器，这个多播器在启动时初始化，然后调用多播器对象中的`multicastEvent`方法 -> 在注册到多播器内的所有监听器，通过`getApplicationListeners`方法找出所有支持指定事件的监听器  -> <font color="red">监听器</font>：执行实现的`onApplicationEvent`方法
 
+6、Spring在哪些地方使用到了事件驱动
